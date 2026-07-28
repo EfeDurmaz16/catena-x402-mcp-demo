@@ -17,13 +17,27 @@ if (!payTo) {
   process.exit(2)
 }
 
+// Reach the facilitator before announcing readiness: a server that prints
+// its URL and answers /healthz while settlement is impossible is worse than
+// one that refuses to start.
+const facilitatorClient = new HTTPFacilitatorClient({
+  url: config.X402_FACILITATOR_URL,
+})
+try {
+  await facilitatorClient.getSupported()
+} catch (error) {
+  console.error(
+    `Facilitator unreachable at ${config.X402_FACILITATOR_URL}; not starting.`,
+    error,
+  )
+  process.exit(1)
+}
+
 const app = createPaidMcpServer({
   payTo,
   price: config.TOOL_PRICE_USD,
   network: config.X402_NETWORK,
-  facilitatorClient: new HTTPFacilitatorClient({
-    url: config.X402_FACILITATOR_URL,
-  }),
+  facilitatorClient,
 })
 
 const server = app.listen(config.MCP_PORT, () => {

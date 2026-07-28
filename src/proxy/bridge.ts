@@ -14,6 +14,11 @@ import { privateKeyToAccount } from "viem/accounts"
 import { moneyToMicros } from "../config.js"
 import type { PaymentRequirements } from "@x402/core/types"
 
+/** Circle USDC on Base Sepolia. The cap is denominated in micro-USD, which
+ * only holds for a 6-decimal USD-pegged asset, so the policy pins it: a
+ * challenge in any other token is refused rather than mis-priced. */
+const USDC_BASE_SEPOLIA = "0x036cbd53842c5426634e7929541ec2318f3dcf7e"
+
 export interface ProxyOptions {
   upstreamUrl: string
   evmPrivateKey: `0x${string}`
@@ -67,10 +72,19 @@ export function createPayingProxy(options: ProxyOptions): Server {
     requirements: PaymentRequirements[],
   ): PaymentRequirements[] => {
     const affordable = requirements.filter((r) => {
-      const amount = (r as { amount?: unknown }).amount
-      const reqNetwork = (r as { network?: unknown }).network
+      const {
+        amount,
+        network: reqNetwork,
+        asset,
+      } = r as {
+        amount?: unknown
+        network?: unknown
+        asset?: unknown
+      }
       return (
         reqNetwork === network &&
+        typeof asset === "string" &&
+        asset.toLowerCase() === USDC_BASE_SEPOLIA &&
         typeof amount === "string" &&
         /^\d+$/.test(amount) &&
         spentMicros + BigInt(amount) <= capMicros
@@ -111,10 +125,11 @@ export function createPayingProxy(options: ProxyOptions): Server {
     { capabilities: { tools: {} } },
   )
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => {
+  server.setRequestHandler(ListToolsRequestSchema, async (request) => {
     const upstream = await connectUpstream(baseFetch)
     try {
-      return await upstream.listTools()
+      // Forward params so a paginated tools/list keeps its cursor.
+      return await upstream.listTools(request.params)
     } finally {
       await upstream.close()
     }

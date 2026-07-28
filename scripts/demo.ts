@@ -50,11 +50,30 @@ const upstreamUrl = `http://localhost:${config.MCP_PORT}${MCP_PATH}`
 console.log(`Paid MCP server: ${upstreamUrl} (price ${config.TOOL_PRICE_USD})`)
 console.log(`Pay-to:          ${config.SELLER_PAY_TO_ADDRESS}\n`)
 
+// Capture the settlement receipt the facilitator returns, so the demo can
+// show the transaction instead of asserting that one happened.
+let settlement: { transaction?: string } | undefined
+const capturingFetch: typeof fetch = async (input, init) => {
+  const response = await fetch(input, init)
+  const header = response.headers.get("payment-response")
+  if (header) {
+    try {
+      settlement = JSON.parse(
+        Buffer.from(header, "base64").toString("utf8"),
+      ) as { transaction?: string }
+    } catch {
+      // a malformed receipt header is not worth failing the demo over
+    }
+  }
+  return response
+}
+
 const proxy = createPayingProxy({
   upstreamUrl,
   evmPrivateKey: config.BUYER_EVM_PRIVATE_KEY,
   spendCapUsd: config.PROXY_SPEND_CAP_USD,
   network: config.X402_NETWORK,
+  fetchImpl: capturingFetch,
 })
 const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
 await proxy.connect(serverTransport)
@@ -76,6 +95,11 @@ try {
     console.log(
       `tools/call ${PAID_TOOL} (paid): ${JSON.stringify(result.content).slice(0, 120)}...`,
     )
+    if (settlement?.transaction) {
+      console.log(
+        `Settled on-chain: https://sepolia.basescan.org/tx/${settlement.transaction}`,
+      )
+    }
     console.log(
       "\nPASS: discovery was free, the paid tool settled over x402, and the result came back through the proxy.",
     )

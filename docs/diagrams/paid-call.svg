@@ -85,27 +85,32 @@
     <text class="badge accent" x="250" y="207" text-anchor="middle">proxy signs</text>
     <text class="sub muted" x="250" y="221" text-anchor="middle">EIP-3009 - spend cap</text>
 
-    <!-- facilitator -->
+    <!-- paid retry, then verify only -->
     <line class="msg-accent" x1="322" y1="210" x2="420" y2="210"/>
     <line class="msg-accent" x1="420" y1="230" x2="600" y2="230"/>
-    <text class="step accent" x="510" y="224" text-anchor="middle">verify / settle</text>
-    <line class="msg-accent" x1="600" y1="250" x2="780" y2="250"/>
-    <rect class="paid" x="708" y="236" width="120" height="28" rx="5"/>
-    <text class="badge accent" x="768" y="254" text-anchor="middle">USDC deposit</text>
+    <text class="step accent" x="510" y="224" text-anchor="middle">verify</text>
 
-    <!-- tool runs -->
-    <line class="msg" x1="600" y1="280" x2="420" y2="280"/>
-    <rect class="box" x="358" y="268" width="124" height="24" rx="4"/>
-    <text class="badge ink" x="420" y="284" text-anchor="middle">tool runs</text>
+    <!-- tool runs after verify, before settle -->
+    <rect class="box" x="358" y="248" width="124" height="24" rx="4"/>
+    <text class="badge ink" x="420" y="264" text-anchor="middle">tool runs</text>
+    <text class="sub muted" x="560" y="264" text-anchor="middle">response buffered</text>
 
-    <!-- result -->
-    <line class="msg" x1="420" y1="310" x2="250" y2="310"/>
-    <line class="msg" x1="250" y1="330" x2="90" y2="330"/>
-    <rect class="box" x="40" y="318" width="100" height="24" rx="4"/>
-    <text class="badge ink" x="90" y="334" text-anchor="middle">result</text>
+    <!-- settle only after the tool succeeded -->
+    <line class="msg-accent" x1="420" y1="288" x2="600" y2="288"/>
+    <text class="step accent" x="510" y="282" text-anchor="middle">settle (skipped on 4xx)</text>
+    <line class="msg-accent" x1="600" y1="308" x2="780" y2="308"/>
+    <rect class="paid" x="708" y="294" width="120" height="28" rx="5"/>
+    <text class="badge accent" x="768" y="312" text-anchor="middle">USDC deposit</text>
 
-    <text class="sub muted" x="90" y="380" text-anchor="middle">stdio</text>
-    <text class="sub muted" x="335" y="380" text-anchor="middle">Streamable HTTP + x402</text>
-    <text class="sub muted" x="690" y="380" text-anchor="middle">Base Sepolia to sandbox</text>
+    <!-- result released after settlement -->
+    <line class="msg" x1="420" y1="332" x2="250" y2="332"/>
+    <line class="msg" x1="250" y1="352" x2="90" y2="352"/>
+    <rect class="box" x="40" y="340" width="100" height="24" rx="4"/>
+    <text class="badge ink" x="90" y="356" text-anchor="middle">result</text>
+    <text class="sub muted" x="335" y="326" text-anchor="middle">released after settle</text>
+
+    <text class="sub muted" x="90" y="396" text-anchor="middle">stdio</text>
+    <text class="sub muted" x="335" y="396" text-anchor="middle">Streamable HTTP + x402</text>
+    <text class="sub muted" x="690" y="396" text-anchor="middle">Base Sepolia to sandbox</text>
   </g>
 </svg>

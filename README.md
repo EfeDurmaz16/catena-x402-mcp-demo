@@ -34,9 +34,11 @@ Requires Node >= 22.13 and pnpm.
 ```sh
 pnpm install
 cp .env.example .env
-# set SELLER_PAY_TO_ADDRESS (your Catena sandbox base-sepolia USDC deposit
-# address) and BUYER_EVM_PRIVATE_KEY (a testnet wallet holding Base Sepolia
-# USDC; no ETH needed, transfers are gasless EIP-3009)
+# SELLER_PAY_TO_ADDRESS: your Catena sandbox account's base-sepolia USDC
+#   deposit address, from app.catena.com
+# BUYER_EVM_PRIVATE_KEY: a testnet wallet the proxy pays from. Fund it with
+#   Base Sepolia USDC at https://faucet.circle.com (select Base Sepolia).
+#   USDC only; no ETH is needed, transfers are gasless EIP-3009.
 ```
 
 ## Demo: the whole loop in one command
@@ -60,15 +62,15 @@ as an ordinary stdio MCP server in `.mcp.json`:
   "mcpServers": {
     "paid-market-signal": {
       "command": "pnpm",
-      "args": ["--dir", "/path/to/catena-x402-mcp-demo", "proxy"],
-      "env": {
-        "UPSTREAM_MCP_URL": "http://localhost:4040/mcp",
-        "BUYER_EVM_PRIVATE_KEY": "0x..."
-      }
+      "args": ["--dir", "/path/to/catena-x402-mcp-demo", "proxy"]
     }
   }
 }
 ```
+
+The proxy reads `BUYER_EVM_PRIVATE_KEY` and `UPSTREAM_MCP_URL` from this
+repo's own `.env`, so no secret goes into `.mcp.json`. (`.mcp.json` is
+gitignored here anyway; keep it that way if you copy this setup.)
 
 Claude Code lists both tools and calls them normally; the proxy pays the 402
 behind the scenes. MCP Inspector works the same way:

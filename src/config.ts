@@ -58,5 +58,9 @@ const envSchema = z.object({
 export type Config = z.infer<typeof envSchema>
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
-  return envSchema.parse(env)
+  const parsed = envSchema.safeParse(env)
+  if (!parsed.success) {
+    throw new Error(`Invalid environment:\n${z.prettifyError(parsed.error)}`)
+  }
+  return parsed.data
 }

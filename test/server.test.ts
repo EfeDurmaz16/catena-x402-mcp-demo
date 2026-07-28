@@ -132,9 +132,6 @@ describe("server hardening", () => {
     server = await startTestServer()
     // Missing text/event-stream in Accept → Streamable HTTP answers 406.
     // Without statusCode sync, @x402/express would still settle.
-    const client = await connectClient(server.url, payingFetch())
-    // Force a raw paid POST with a bad Accept so the transport 406s after verify.
-    await client.close()
     const signer = privateKeyToAccount(TEST_PRIVATE_KEY)
     const fetchWithPay = wrapFetchWithPayment(
       fetch,
@@ -154,6 +151,8 @@ describe("server hardening", () => {
       }),
     })
     expect(response.status).toBeGreaterThanOrEqual(400)
+    // The payment WAS verified; only settlement is cancelled by the 4xx.
+    expect(server.facilitator.verifyCalls).toHaveLength(1)
     expect(server.facilitator.settleCalls).toHaveLength(0)
   })
 
