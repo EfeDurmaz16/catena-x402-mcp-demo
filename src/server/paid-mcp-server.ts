@@ -109,6 +109,17 @@ export function createPaidMcpServer(options: PaidMcpServerOptions): Express {
   })
 
   app.post(MCP_PATH, (req, res, next) => {
+    // JSON-RPC batching was removed from the MCP spec (2025-03-26 and
+    // later), but the transport still tolerates arrays from legacy clients.
+    // A batch could smuggle a paid tools/call past a single-message gate,
+    // so fail closed on arrays instead of gating per element.
+    if (Array.isArray(req.body)) {
+      res.status(400).json({
+        error: "batch_not_supported",
+        message: "JSON-RPC batch requests are not supported",
+      })
+      return
+    }
     if (isPaidToolCall(req.body)) {
       payGate(req, res, next)
       return

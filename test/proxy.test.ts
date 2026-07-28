@@ -82,9 +82,87 @@ describe("paying proxy", () => {
       arguments: { topic: "usdc" },
     })
     expect(second.isError).toBe(true)
-    expect(JSON.stringify(second.content)).toContain("Refused before payment")
+    expect(JSON.stringify(second.content)).toContain("spend cap")
     // Exactly one settlement: the over-cap call never reached the payment leg.
     expect(server.facilitator.settleCalls).toHaveLength(1)
     await client.close()
+  })
+})
+
+describe("proxy hardening", () => {
+  it("executes a free tool exactly once upstream (no probe request)", async () => {
+    server = await startTestServer()
+    let pricingPosts = 0
+    // The paying wrapper may call with (url, init) or a Request object.
+    const countingFetch: typeof fetch = async (input, init) => {
+      let method = init?.method
+      let body = typeof init?.body === "string" ? init.body : ""
+      if (input instanceof Request) {
+        method = input.method
+        body = await input
+          .clone()
+          .text()
+          .catch(() => "")
+      }
+      if (method === "POST" && body.includes('"pricing"')) {
+        pricingPosts += 1
+      }
+      return fetch(input, init)
+    }
+    const proxy = createPayingProxy({
+      upstreamUrl: `${server.url}${MCP_PATH}`,
+      evmPrivateKey: TEST_PRIVATE_KEY,
+      spendCapUsd: "$0.01",
+      fetchImpl: countingFetch,
+    })
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair()
+    await proxy.connect(serverTransport)
+    const client = new Client({ name: "standard-client", version: "0.0.0" })
+    await client.connect(clientTransport)
+    await client.callTool({ name: "pricing", arguments: {} })
+    expect(pricingPosts).toBe(1)
+    await client.close()
+  })
+
+  it("caps concurrent paid calls: only one of two settles under a one-call cap", async () => {
+    server = await startTestServer() // $0.001 per call
+    const client = await connectThroughProxy(
+      `${server.url}${MCP_PATH}`,
+      "$0.001", // budget for exactly one paid call
+    )
+    const [first, second] = await Promise.all([
+      client.callTool({ name: PAID_TOOL, arguments: { topic: "a" } }),
+      client.callTool({ name: PAID_TOOL, arguments: { topic: "b" } }),
+    ])
+    const errors = [first, second].filter((r) => r.isError === true)
+    expect(errors).toHaveLength(1)
+    expect(server.facilitator.settleCalls).toHaveLength(1)
+    await client.close()
+  })
+})
+
+describe("server hardening", () => {
+  it("rejects JSON-RPC batch requests outright (fail closed)", async () => {
+    server = await startTestServer()
+    const response = await fetch(`${server.url}${MCP_PATH}`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+      },
+      body: JSON.stringify([
+        { jsonrpc: "2.0", id: 1, method: "tools/list" },
+        {
+          jsonrpc: "2.0",
+          id: 2,
+          method: "tools/call",
+          params: { name: PAID_TOOL, arguments: { topic: "smuggled" } },
+        },
+      ]),
+    })
+    expect(response.status).toBe(400)
+    expect(server.facilitator.verifyCalls).toHaveLength(0)
+    expect(server.facilitator.settleCalls).toHaveLength(0)
   })
 })

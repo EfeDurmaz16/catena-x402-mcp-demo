@@ -89,6 +89,6 @@ over-cap call before any payment.
 ## Scope
 
 Consumes public surfaces only: the MCP TypeScript SDK (v1, protocol
-2025-06-18; the v2 SDK targeting the 2026-07-28 spec is beta, and migration
+2025-11-25; the v2 SDK targeting the 2026-07-28 spec is beta, and migration
 is import-path-level), the public x402 packages and facilitator, and a
 Catena sandbox account as the receiving side.
