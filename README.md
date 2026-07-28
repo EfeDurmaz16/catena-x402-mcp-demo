@@ -5,9 +5,48 @@ a paying-proxy reference client that lets any standard MCP client use the
 paid tool without knowing x402 exists. Settlement is real testnet USDC on
 Base Sepolia, landing in a Catena sandbox account.
 
-![Stack: MCP → proxy → x402 → facilitator → Catena deposit](docs/diagrams/stack.svg)
+```mermaid
+flowchart LR
+  CL["Standard MCP client<br/>Claude Code, Inspector"] -->|stdio JSON-RPC| PX["Paying proxy<br/>holds the wallet, spend cap"]
+  PX -->|Streamable HTTP + x402| SV["Paid MCP server<br/>gate in front of the handler"]
+  SV -->|verify then settle| F[Facilitator]
+  F -->|USDC| CA[(Catena sandbox account)]
 
-![One paid tool call sequence](docs/diagrams/paid-call.svg)
+  classDef pay stroke-width:2px
+  class PX,SV pay
+```
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant C as Standard client
+  participant P as Paying proxy
+  participant S as Paid MCP server
+  participant F as Facilitator
+
+  C->>P: tools/list
+  P->>S: tools/list
+  S-->>P: tools (free)
+  P-->>C: tools
+
+  C->>P: tools/call premium_market_signal
+  P->>S: POST (no payment yet)
+  S-->>P: 402 challenge
+  P->>P: within the spend cap? reserve it
+  P->>S: retry with signed payment
+  S->>F: verify
+  F-->>S: valid
+  S->>S: tool runs, response buffered
+  alt handler succeeded
+    S->>F: settle
+    F-->>S: settled
+    S-->>P: 200 result released
+  else handler returned 4xx
+    S->>S: settlement cancelled
+    S-->>P: error, nothing charged
+  end
+  P-->>C: ordinary tool result
+```
 
 ## How it works
 
