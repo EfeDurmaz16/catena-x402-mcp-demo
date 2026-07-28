@@ -5,31 +5,27 @@ a paying-proxy reference client that lets any standard MCP client use the
 paid tool without knowing x402 exists. Settlement is real testnet USDC on
 Base Sepolia, landing in a Catena sandbox account.
 
+![Stack: MCP → proxy → x402 → facilitator → Catena deposit](docs/diagrams/stack.svg)
+
+![One paid tool call sequence](docs/diagrams/paid-call.svg)
+
 ## How it works
 
 The x402 challenge lives at the HTTP layer of the MCP Streamable HTTP
 transport, underneath the JSON-RPC framing, so the MCP protocol itself is
 untouched and standard clients stay compatible.
 
-```
-standard MCP client (Claude Code / Inspector)
-        | stdio
-  paying proxy  - holds the wallet, enforces a spend cap
-        | Streamable HTTP + x402 (402 -> pay -> retry)
-  paid MCP server - payment gate in front of the MCP handler
-        | facilitator verify/settle
-  USDC on Base Sepolia -> Catena sandbox deposit address
-```
-
 - `initialize`, `tools/list`, and the free `pricing` tool cost nothing.
 - `tools/call` on `premium_market_signal` draws a 402 with an x402 v2
   challenge (exact scheme). The proxy pays it, the facilitator settles into
-  the configured `payTo`, and only then does the tool run. Middleware order
-  is the invariant: an unsettled paid call never reaches the tool handler.
-- A paid call's first POST earns the 402 challenge before the tool runs; the
-  proxy refuses it BEFORE paying when its running total would pass
-  `PROXY_SPEND_CAP_USD`. The cap is configuration, never derived from tool
-  arguments, so a prompt-injected tool call cannot raise it.
+  the configured `payTo`, and only then does a successful tool result return.
+  Middleware order is the invariant: unpaid calls never reach the tool
+  handler; MCP HTTP 4xx cancels settlement.
+- The proxy refuses a paid call BEFORE paying when its running total would
+  pass `PROXY_SPEND_CAP_USD`. The cap is configuration, never derived from
+  tool arguments, so a prompt-injected tool call cannot raise it.
+
+More detail: [docs/architecture.md](docs/architecture.md).
 
 ## Setup (sandbox, ~10 minutes)
 
@@ -83,8 +79,8 @@ behind the scenes. MCP Inspector works the same way:
 `pnpm test` runs the server and proxy suites against an in-process server
 with a recording fake facilitator; no network, no money. They prove:
 discovery is free, an unpaid paid-tool call is refused with a 402 before the
-tool runs, a paid call settles exactly once, and the proxy refuses an
-over-cap call before any payment.
+tool runs, a paid call settles exactly once, MCP 4xx does not settle, and
+the proxy refuses an over-cap call before any payment.
 
 ## Scope
 
@@ -92,3 +88,7 @@ Consumes public surfaces only: the MCP TypeScript SDK (v1, protocol
 2025-11-25; the v2 SDK targeting the 2026-07-28 spec is beta, and migration
 is import-path-level), the public x402 packages and facilitator, and a
 Catena sandbox account as the receiving side.
+
+## License
+
+MIT

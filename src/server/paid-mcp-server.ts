@@ -24,8 +24,18 @@ export interface PaidMcpServerOptions {
  * discovery and free tools pass through unpaid. */
 function isPaidToolCall(body: unknown): boolean {
   const message = body as
-    { method?: unknown; params?: { name?: unknown } } | undefined
-  return message?.method === "tools/call" && message.params?.name === PAID_TOOL
+    | {
+        id?: unknown
+        method?: unknown
+        params?: { name?: unknown }
+      }
+    | undefined
+  if (message?.method !== "tools/call" || message.params?.name !== PAID_TOOL) {
+    return false
+  }
+  // JSON-RPC notifications omit id; MCP answers 202 and never runs the tool.
+  // Charging those would settle payment for no execution.
+  return typeof message.id === "string" || typeof message.id === "number"
 }
 
 /** Fresh MCP server per request: the transport is stateless, so nothing is
@@ -77,9 +87,9 @@ function buildMcpServer(price: string): McpServer {
 
 /**
  * Build the paid MCP server's Express app. Middleware order is the security
- * invariant: the payment gate runs before the MCP transport, so a paid
- * tools/call that has not settled never reaches the tool handler, while
- * initialize / tools/list / free tools pass through unpaid.
+ * invariant: unpaid / invalid payment never reaches the MCP handler.
+ * After payment verifies, the handler runs and @x402/express settles only
+ * when the response status is < 400 (see statusCode sync below).
  */
 export function createPaidMcpServer(options: PaidMcpServerOptions): Express {
   const { payTo, price, network, facilitatorClient } = options
@@ -117,13 +127,24 @@ export function createPaidMcpServer(options: PaidMcpServerOptions): Express {
       return
     }
     if (isPaidToolCall(req.body)) {
-      payGate(req, res, next)
-      return
+      // Return the async middleware promise so Express 5 can catch rejections.
+      return payGate(req, res, next)
     }
     next()
   })
 
   app.post(MCP_PATH, async (req, res) => {
+    // @x402/express buffers writeHead and skips settle when res.statusCode
+    // >= 400. StreamableHTTPServerTransport sets status only via writeHead,
+    // leaving statusCode at 200 — sync it or MCP 4xx would still settle.
+    const bufferedWriteHead = res.writeHead.bind(res)
+    res.writeHead = ((...args: Parameters<typeof res.writeHead>) => {
+      if (typeof args[0] === "number") {
+        res.statusCode = args[0]
+      }
+      return bufferedWriteHead(...args)
+    }) as typeof res.writeHead
+
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
     })

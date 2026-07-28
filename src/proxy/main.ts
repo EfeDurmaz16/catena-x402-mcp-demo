@@ -20,6 +20,7 @@ const proxy = createPayingProxy({
   upstreamUrl: config.UPSTREAM_MCP_URL,
   evmPrivateKey: config.BUYER_EVM_PRIVATE_KEY,
   spendCapUsd: config.PROXY_SPEND_CAP_USD,
+  network: config.X402_NETWORK,
 })
 
 await proxy.connect(new StdioServerTransport())

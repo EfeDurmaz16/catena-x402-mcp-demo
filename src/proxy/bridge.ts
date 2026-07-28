@@ -19,18 +19,21 @@ export interface ProxyOptions {
   evmPrivateKey: `0x${string}`
   /** Total the proxy may spend across its lifetime, e.g. "$0.01". */
   spendCapUsd: string
+  /** Only challenges on this network are signed (e.g. "eip155:84532"). */
+  network: `${string}:${string}`
   fetchImpl?: typeof fetch
 }
 
-/** True when an upstream error is the unpaid 402 that survives after the
- * budget policy refused to sign a payment for it. */
-function isPaymentRefused(error: unknown): boolean {
+/** True when @x402 refused to sign because every requirement was filtered
+ * by our budget policy. Do NOT match HTTP 402 or the substring "x402":
+ * post-payment 402s and scheme errors also contain those and are not
+ * spend-cap refusals. */
+function isBudgetRefusal(error: unknown): boolean {
   if (typeof error !== "object" || error === null) return false
-  if ("code" in error && error.code === 402) return true
   return (
     "message" in error &&
     typeof error.message === "string" &&
-    error.message.includes("402")
+    error.message.includes("filtered out by policies")
   )
 }
 
@@ -48,7 +51,7 @@ function isPaymentRefused(error: unknown): boolean {
  */
 // eslint-disable-next-line @typescript-eslint/no-deprecated
 export function createPayingProxy(options: ProxyOptions): Server {
-  const { upstreamUrl, evmPrivateKey, spendCapUsd } = options
+  const { upstreamUrl, evmPrivateKey, spendCapUsd, network } = options
   const baseFetch = options.fetchImpl ?? fetch
   const capMicros = moneyToMicros(spendCapUsd)
   let spentMicros = 0n
@@ -65,7 +68,9 @@ export function createPayingProxy(options: ProxyOptions): Server {
   ): PaymentRequirements[] => {
     const affordable = requirements.filter((r) => {
       const amount = (r as { amount?: unknown }).amount
+      const reqNetwork = (r as { network?: unknown }).network
       return (
+        reqNetwork === network &&
         typeof amount === "string" &&
         /^\d+$/.test(amount) &&
         spentMicros + BigInt(amount) <= capMicros
@@ -82,7 +87,8 @@ export function createPayingProxy(options: ProxyOptions): Server {
   const paying = wrapFetchWithPayment(
     baseFetch,
     new x402Client()
-      .register("eip155:*", new ExactEvmScheme(signer))
+      // Pin the scheme to the configured network; do not sign eip155:* wildcards.
+      .register(network, new ExactEvmScheme(signer))
       .registerPolicy(budgetPolicy),
   )
 
@@ -122,7 +128,7 @@ export function createPayingProxy(options: ProxyOptions): Server {
     try {
       return await upstream.callTool(request.params)
     } catch (error) {
-      if (isPaymentRefused(error)) {
+      if (isBudgetRefusal(error)) {
         return {
           isError: true,
           content: [

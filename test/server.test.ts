@@ -127,4 +127,53 @@ describe("server hardening", () => {
     expect(server.facilitator.verifyCalls).toHaveLength(0)
     expect(server.facilitator.settleCalls).toHaveLength(0)
   })
+
+  it("does not settle when a paid call returns MCP HTTP 4xx", async () => {
+    server = await startTestServer()
+    // Missing text/event-stream in Accept → Streamable HTTP answers 406.
+    // Without statusCode sync, @x402/express would still settle.
+    const client = await connectClient(server.url, payingFetch())
+    // Force a raw paid POST with a bad Accept so the transport 406s after verify.
+    await client.close()
+    const signer = privateKeyToAccount(TEST_PRIVATE_KEY)
+    const fetchWithPay = wrapFetchWithPayment(
+      fetch,
+      new x402Client().register("eip155:*", new ExactEvmScheme(signer)),
+    )
+    const response = await fetchWithPay(`${server.url}${MCP_PATH}`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: { name: PAID_TOOL, arguments: { topic: "usdc" } },
+      }),
+    })
+    expect(response.status).toBeGreaterThanOrEqual(400)
+    expect(server.facilitator.settleCalls).toHaveLength(0)
+  })
+
+  it("does not charge a notification-shaped paid tools/call (no id)", async () => {
+    server = await startTestServer()
+    const response = await fetch(`${server.url}${MCP_PATH}`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: { name: PAID_TOOL, arguments: { topic: "usdc" } },
+      }),
+    })
+    // Without an id this is not gated as paid; MCP may 202/4xx, but never settle.
+    expect(server.facilitator.verifyCalls).toHaveLength(0)
+    expect(server.facilitator.settleCalls).toHaveLength(0)
+    expect(response.status).not.toBe(402)
+  })
 })

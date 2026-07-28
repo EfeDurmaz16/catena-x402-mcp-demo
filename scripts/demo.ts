@@ -54,6 +54,7 @@ const proxy = createPayingProxy({
   upstreamUrl,
   evmPrivateKey: config.BUYER_EVM_PRIVATE_KEY,
   spendCapUsd: config.PROXY_SPEND_CAP_USD,
+  network: config.X402_NETWORK,
 })
 const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
 await proxy.connect(serverTransport)

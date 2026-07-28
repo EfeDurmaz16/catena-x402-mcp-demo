@@ -26,6 +26,7 @@ async function connectThroughProxy(
     upstreamUrl,
     evmPrivateKey: TEST_PRIVATE_KEY,
     spendCapUsd,
+    network: "eip155:84532",
   })
   const [clientTransport, serverTransport] =
     InMemoryTransport.createLinkedPair()
@@ -113,6 +114,7 @@ describe("proxy hardening", () => {
       upstreamUrl: `${server.url}${MCP_PATH}`,
       evmPrivateKey: TEST_PRIVATE_KEY,
       spendCapUsd: "$0.01",
+      network: "eip155:84532",
       fetchImpl: countingFetch,
     })
     const [clientTransport, serverTransport] =

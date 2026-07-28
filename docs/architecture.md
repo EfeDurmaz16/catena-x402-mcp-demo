@@ -1,5 +1,9 @@
 # Architecture
 
+![Stack](diagrams/stack.svg)
+
+![One paid tool call](diagrams/paid-call.svg)
+
 ```
 standard MCP client (Claude Code / Claude Desktop / MCP Inspector)
         | stdio (JSON-RPC)
@@ -14,10 +18,12 @@ standard MCP client (Claude Code / Claude Desktop / MCP Inspector)
 
 The x402 challenge lives at the HTTP layer of the Streamable HTTP
 transport, underneath MCP's JSON-RPC framing, so the MCP protocol is
-untouched and standard clients stay compatible. Express middleware order is
-the security boundary, exactly like the identity gate in
-catena-x402-ack-id-demo: the payment gate runs before the MCP handler, so a
-paid tools/call that has not settled never reaches the tool. Discovery
+untouched and standard clients stay compatible. Express middleware order
+is the security boundary: unpaid or invalid payment never reaches the MCP
+handler. After payment verifies, the handler runs and `@x402/express`
+settles only when the HTTP status is &lt; 400 (this repo syncs
+`res.statusCode` from the transport's `writeHead` so MCP 4xx responses
+cancel settlement instead of charging for a failed call). Discovery
 (`initialize`, `tools/list`) and free tools pass unpaid.
 
 Two hardening choices worth knowing:
@@ -28,6 +34,8 @@ Two hardening choices worth knowing:
   400 instead of gating per element.
 - **Per-request server instances.** The transport is stateless and each
   request gets a fresh McpServer, so no state leaks between paid calls.
+- **Notifications are not charged.** A `tools/call` without a JSON-RPC
+  `id` never runs the tool; the gate ignores it so it cannot settle.
 
 ## The proxy: how a standard client pays without knowing it
 

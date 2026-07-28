@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 420" role="img" aria-labelledby="title desc">
+  <title id="title">Stack</title>
+  <desc id="desc">MCP tools metered over x402 into a Catena sandbox account</desc>
+  <defs>
+    <style>
+      .bg { fill: #FAFAF8; }
+      .ink { fill: #1A1A1A; }
+      .muted { fill: #6B6860; }
+      .line { stroke: #C8C5BE; fill: none; stroke-width: 1.25; }
+      .arrow { stroke: #C8C5BE; fill: none; stroke-width: 1.25; marker-end: url(#arrow); }
+      .box { fill: #FFFFFF; stroke: #C8C5BE; stroke-width: 1.25; }
+      .box-soft { fill: #F3F2EE; stroke: #C8C5BE; stroke-width: 1.25; }
+      .accent-box { fill: #E8F5F0; stroke: #0B6E4F; stroke-width: 1.75; }
+      .accent { fill: #0B6E4F; }
+      .label { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12.5px; font-weight: 600; }
+      .sub { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 11px; font-weight: 400; }
+      .title { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 20px; font-weight: 650; }
+      .subtitle { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12.5px; font-weight: 400; }
+      .tiny { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 10.5px; font-weight: 500; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M1 1.5 L8.5 5 L1 8.5 Z" fill="#C8C5BE"/>
+    </marker>
+    <marker id="arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M1 1.5 L8.5 5 L1 8.5 Z" fill="#0B6E4F"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="860" height="420" rx="10"/>
+
+  <text class="title ink" x="32" y="40">Stack</text>
+  <text class="subtitle muted" x="32" y="60">MCP tools metered over x402 into a Catena sandbox account</text>
+  <line class="line" x1="32" y1="76" x2="828" y2="76"/>
+
+  <!-- Row 1 -->
+  <rect class="box" x="32" y="100" width="150" height="64" rx="8"/>
+  <text class="label ink" x="107" y="126" text-anchor="middle">Claude Code /</text>
+  <text class="label ink" x="107" y="144" text-anchor="middle">MCP Inspector</text>
+
+  <line class="arrow" x1="182" y1="132" x2="214" y2="132"/>
+  <text class="tiny muted" x="198" y="122" text-anchor="middle">stdio</text>
+
+  <rect class="box-soft" x="216" y="100" width="168" height="64" rx="8"/>
+  <text class="label ink" x="300" y="122" text-anchor="middle">Paying proxy</text>
+  <text class="sub muted" x="300" y="140" text-anchor="middle">wallet + spend cap</text>
+  <text class="tiny muted" x="300" y="154" text-anchor="middle">MCP SDK stdio server</text>
+
+  <line class="arrow" x1="384" y1="132" x2="416" y2="132"/>
+  <text class="tiny muted" x="400" y="118" text-anchor="middle">Streamable</text>
+  <text class="tiny muted" x="400" y="130" text-anchor="middle">HTTP + x402</text>
+
+  <rect class="box" x="418" y="100" width="168" height="64" rx="8"/>
+  <text class="label ink" x="502" y="126" text-anchor="middle">Paid MCP server</text>
+  <text class="sub muted" x="502" y="144" text-anchor="middle">x402 gate to tools</text>
+
+  <line class="arrow" x1="586" y1="132" x2="618" y2="132"/>
+
+  <rect class="box" x="620" y="100" width="208" height="64" rx="8"/>
+  <text class="label ink" x="724" y="126" text-anchor="middle">x402.org facilitator</text>
+  <text class="sub muted" x="724" y="144" text-anchor="middle">verify / settle</text>
+
+  <path class="line" d="M724 164 L724 196" marker-end="url(#arrow)"/>
+
+  <rect class="box" x="216" y="200" width="300" height="56" rx="8"/>
+  <text class="label ink" x="366" y="224" text-anchor="middle">Base Sepolia USDC</text>
+  <text class="sub muted" x="366" y="242" text-anchor="middle">exact scheme - per-call settlement</text>
+
+  <line class="arrow" x1="516" y1="228" x2="548" y2="228" style="stroke:#0B6E4F;marker-end:url(#arrow-accent)"/>
+
+  <rect class="accent-box" x="550" y="192" width="278" height="72" rx="8"/>
+  <text class="label accent" x="689" y="220" text-anchor="middle">Catena sandbox deposit</text>
+  <text class="sub ink" x="689" y="240" text-anchor="middle">receive bank - ledger credit</text>
+  <circle cx="570" cy="212" r="4" class="accent"/>
+
+  <rect class="box-soft" x="32" y="300" width="796" height="88" rx="8"/>
+  <text class="label ink" x="52" y="328">Where Catena sits</text>
+  <text class="sub muted" x="52" y="350">Payment settles on-chain to the sandbox deposit address. Catena is the receive bank -</text>
+  <text class="sub muted" x="52" y="368">the paid MCP server's payTo - not the wallet that signs. Discovery and free tools stay unpaid.</text>
+</svg>
