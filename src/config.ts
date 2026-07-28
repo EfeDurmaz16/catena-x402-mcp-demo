@@ -49,6 +49,12 @@ const envSchema = z.object({
   ),
   /** Upstream paid MCP server the proxy fronts. */
   UPSTREAM_MCP_URL: z.url().default("http://localhost:4040/mcp"),
+  /** Total the proxy may spend across its lifetime. */
+  PROXY_SPEND_CAP_USD: z
+    .string()
+    .regex(/^\$\d+(\.\d{1,6})?$/)
+    .default("$0.01")
+    .refine((v) => moneyToMicros(v) > 0n, "cap must be greater than 0"),
 })
 
 export type Config = z.infer<typeof envSchema>
