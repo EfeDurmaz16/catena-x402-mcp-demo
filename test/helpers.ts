@@ -68,13 +68,11 @@ export interface TestServer {
   close: () => Promise<void>
 }
 
-export async function startTestServer(
-  options: { price?: string } = {},
-): Promise<TestServer> {
+export async function startTestServer(): Promise<TestServer> {
   const facilitator = new FakeFacilitatorClient()
   const app = createPaidMcpServer({
     payTo: TEST_PAY_TO,
-    price: options.price ?? "$0.001",
+    price: "$0.001",
     network: TEST_NETWORK,
     facilitatorClient: facilitator,
   })

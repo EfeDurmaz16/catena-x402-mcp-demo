@@ -18,6 +18,12 @@ export function moneyToMicros(money: string): bigint {
 
 const emptyToUndefined = (v: unknown) => (v === "" ? undefined : v)
 
+/** A positive US-dollar amount, e.g. "$0.001". */
+const usdAmount = z
+  .string()
+  .regex(/^\$\d+(\.\d{1,6})?$/)
+  .refine((v) => moneyToMicros(v) > 0n, "must be greater than 0")
+
 const envSchema = z.object({
   MCP_PORT: z.coerce.number().int().positive().max(65535).default(4040),
   /** Address receiving tool-call payments: the Catena sandbox account's
@@ -31,11 +37,7 @@ const envSchema = z.object({
       .optional(),
   ),
   /** Price of one paid tool invocation. */
-  TOOL_PRICE_USD: z
-    .string()
-    .regex(/^\$\d+(\.\d{1,6})?$/)
-    .default("$0.001")
-    .refine((v) => moneyToMicros(v) > 0n, "price must be greater than 0"),
+  TOOL_PRICE_USD: usdAmount.default("$0.001"),
   X402_NETWORK: z.literal("eip155:84532").default("eip155:84532"),
   X402_FACILITATOR_URL: z.url().default("https://x402.org/facilitator"),
   /** Funded Base Sepolia key the paying proxy signs payments with. */
@@ -50,11 +52,7 @@ const envSchema = z.object({
   /** Upstream paid MCP server the proxy fronts. */
   UPSTREAM_MCP_URL: z.url().default("http://localhost:4040/mcp"),
   /** Total the proxy may spend across its lifetime. */
-  PROXY_SPEND_CAP_USD: z
-    .string()
-    .regex(/^\$\d+(\.\d{1,6})?$/)
-    .default("$0.01")
-    .refine((v) => moneyToMicros(v) > 0n, "cap must be greater than 0"),
+  PROXY_SPEND_CAP_USD: usdAmount.default("$0.01"),
 })
 
 export type Config = z.infer<typeof envSchema>

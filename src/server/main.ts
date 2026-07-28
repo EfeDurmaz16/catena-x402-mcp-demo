@@ -9,7 +9,8 @@ try {
 }
 
 const config = loadConfig()
-if (!config.SELLER_PAY_TO_ADDRESS) {
+const payTo = config.SELLER_PAY_TO_ADDRESS
+if (!payTo) {
   console.error(
     "SELLER_PAY_TO_ADDRESS is required: tool payments settle to this address (your Catena sandbox deposit address).",
   )
@@ -17,7 +18,7 @@ if (!config.SELLER_PAY_TO_ADDRESS) {
 }
 
 const app = createPaidMcpServer({
-  payTo: config.SELLER_PAY_TO_ADDRESS,
+  payTo,
   price: config.TOOL_PRICE_USD,
   network: config.X402_NETWORK,
   facilitatorClient: new HTTPFacilitatorClient({
@@ -27,7 +28,7 @@ const app = createPaidMcpServer({
 
 const server = app.listen(config.MCP_PORT, () => {
   console.log(
-    `Paid MCP server on http://localhost:${config.MCP_PORT}${MCP_PATH} (tool price ${config.TOOL_PRICE_USD}, pay-to ${config.SELLER_PAY_TO_ADDRESS ?? ""})`,
+    `Paid MCP server on http://localhost:${config.MCP_PORT}${MCP_PATH} (tool price ${config.TOOL_PRICE_USD}, pay-to ${payTo})`,
   )
 })
 // Fail loudly if the port is taken: a stale server with old config would

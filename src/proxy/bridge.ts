@@ -14,21 +14,6 @@ import { privateKeyToAccount } from "viem/accounts"
 import { moneyToMicros } from "../config.js"
 import type { PaymentRequirements } from "@x402/core/types"
 
-/**
- * The paying proxy: a local MCP server a standard client (Claude Code,
- * Claude Desktop, MCP Inspector) can spawn over stdio. It holds the wallet
- * and fronts the remote paid MCP server: tools/list is forwarded verbatim,
- * and a tools/call that draws a 402 upstream is paid transparently and
- * retried, so the standard client only ever sees ordinary tool results.
- *
- * Money discipline: the spend cap binds at the signing point. A payment
- * policy on the x402 client filters out any challenge the remaining budget
- * cannot cover and reserves the chosen amount synchronously in the same
- * tick, so concurrent tool calls cannot both slip under the cap and there
- * is no separate probe request (each tool executes upstream exactly once).
- * The cap is configuration, never derived from tool arguments, so a
- * prompt-injected tool call cannot raise it.
- */
 export interface ProxyOptions {
   upstreamUrl: string
   evmPrivateKey: `0x${string}`
@@ -40,13 +25,27 @@ export interface ProxyOptions {
 /** True when an upstream error is the unpaid 402 that survives after the
  * budget policy refused to sign a payment for it. */
 function isPaymentRefused(error: unknown): boolean {
-  const withCode = error as { code?: unknown; message?: unknown }
-  if (withCode.code === 402) return true
+  if (typeof error !== "object" || error === null) return false
+  if ("code" in error && error.code === 402) return true
   return (
-    typeof withCode.message === "string" && withCode.message.includes("402")
+    "message" in error &&
+    typeof error.message === "string" &&
+    error.message.includes("402")
   )
 }
 
+/**
+ * The paying proxy: a local MCP server a standard client (Claude Code,
+ * Claude Desktop, MCP Inspector) can spawn over stdio. It holds the wallet
+ * and fronts the remote paid MCP server: tools/list is forwarded verbatim,
+ * and a tools/call that draws a 402 upstream is paid transparently and
+ * retried, so the standard client only ever sees ordinary tool results.
+ *
+ * Money discipline: the spend cap binds at the signing point (see the
+ * budget policy below), and there is no separate probe request: each tool
+ * executes upstream exactly once. The cap is configuration, never derived
+ * from tool arguments, so a prompt-injected tool call cannot raise it.
+ */
 // eslint-disable-next-line @typescript-eslint/no-deprecated
 export function createPayingProxy(options: ProxyOptions): Server {
   const { upstreamUrl, evmPrivateKey, spendCapUsd } = options
@@ -54,11 +53,12 @@ export function createPayingProxy(options: ProxyOptions): Server {
   const capMicros = moneyToMicros(spendCapUsd)
   let spentMicros = 0n
 
-  // Cap enforcement AND reservation live in this synchronous policy, which
-  // the x402 client runs while selecting what to pay. No await separates the
-  // check from the reservation, so overlapping calls serialize correctly. A
-  // payment that later fails leaves its reservation in place: conservative
-  // in the safe direction (the proxy can only underspend its cap).
+  // The x402 client runs this synchronous policy while selecting what to
+  // pay: challenges the remaining budget cannot cover are filtered out, and
+  // the chosen amount is reserved in the same tick, so overlapping tool
+  // calls cannot both slip under the cap. A payment that later fails leaves
+  // its reservation in place: conservative in the only safe direction (the
+  // proxy can underspend its cap, never overspend it).
   const budgetPolicy = (
     _x402Version: number,
     requirements: PaymentRequirements[],
@@ -73,7 +73,9 @@ export function createPayingProxy(options: ProxyOptions): Server {
     })
     const chosen = affordable[0] as { amount?: string } | undefined
     if (chosen?.amount) spentMicros += BigInt(chosen.amount)
-    return affordable
+    // Return only the reserved entry so reserved == signed by construction,
+    // not by relying on the client's default first-entry selector.
+    return affordable.slice(0, 1)
   }
 
   const signer = privateKeyToAccount(evmPrivateKey)

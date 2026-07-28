@@ -20,12 +20,8 @@ export interface PaidMcpServerOptions {
   facilitatorClient: FacilitatorClient
 }
 
-/**
- * The x402 challenge/payment lives at the HTTP layer of the Streamable HTTP
- * transport, underneath MCP's JSON-RPC framing. Discovery stays free; only a
- * tools/call for the paid tool must carry a payment. This predicate decides
- * which requests the payment gate applies to.
- */
+/** The payment gate applies only to a tools/call for the paid tool;
+ * discovery and free tools pass through unpaid. */
 function isPaidToolCall(body: unknown): boolean {
   const message = body as
     { method?: unknown; params?: { name?: unknown } } | undefined
@@ -34,7 +30,7 @@ function isPaidToolCall(body: unknown): boolean {
 
 /** Fresh MCP server per request: the transport is stateless, so nothing is
  * shared between calls and a crashed request cannot poison the next one. */
-function buildMcpServer(): McpServer {
+function buildMcpServer(price: string): McpServer {
   const server = new McpServer({
     name: "catena-x402-mcp-demo",
     version: "0.1.0",
@@ -49,7 +45,7 @@ function buildMcpServer(): McpServer {
       content: [
         {
           type: "text",
-          text: `${PAID_TOOL} is a paid tool; invoking it requires an x402 USDC payment on Base Sepolia. This pricing tool is free.`,
+          text: `${PAID_TOOL} is a paid tool; each invocation costs ${price}, paid over x402 (USDC on Base Sepolia). This pricing tool is free.`,
         },
       ],
     }),
@@ -127,19 +123,15 @@ export function createPaidMcpServer(options: PaidMcpServerOptions): Express {
     next()
   })
 
-  app.post(MCP_PATH, (req, res, next) => {
+  app.post(MCP_PATH, async (req, res) => {
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
     })
     res.on("close", () => {
       void transport.close()
     })
-    buildMcpServer()
-      .connect(transport)
-      .then(() => transport.handleRequest(req, res, req.body))
-      .catch((error: unknown) => {
-        next(error)
-      })
+    await buildMcpServer(price).connect(transport)
+    await transport.handleRequest(req, res, req.body)
   })
 
   return app

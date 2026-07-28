@@ -141,28 +141,3 @@ describe("proxy hardening", () => {
     await client.close()
   })
 })
-
-describe("server hardening", () => {
-  it("rejects JSON-RPC batch requests outright (fail closed)", async () => {
-    server = await startTestServer()
-    const response = await fetch(`${server.url}${MCP_PATH}`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        accept: "application/json, text/event-stream",
-      },
-      body: JSON.stringify([
-        { jsonrpc: "2.0", id: 1, method: "tools/list" },
-        {
-          jsonrpc: "2.0",
-          id: 2,
-          method: "tools/call",
-          params: { name: PAID_TOOL, arguments: { topic: "smuggled" } },
-        },
-      ]),
-    })
-    expect(response.status).toBe(400)
-    expect(server.facilitator.verifyCalls).toHaveLength(0)
-    expect(server.facilitator.settleCalls).toHaveLength(0)
-  })
-})

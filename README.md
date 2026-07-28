@@ -14,7 +14,7 @@ untouched and standard clients stay compatible.
 ```
 standard MCP client (Claude Code / Inspector)
         | stdio
-  paying proxy  - holds the wallet, quotes unpaid, enforces a spend cap
+  paying proxy  - holds the wallet, enforces a spend cap
         | Streamable HTTP + x402 (402 -> pay -> retry)
   paid MCP server - payment gate in front of the MCP handler
         | facilitator verify/settle
@@ -26,10 +26,10 @@ standard MCP client (Claude Code / Inspector)
   challenge (exact scheme). The proxy pays it, the facilitator settles into
   the configured `payTo`, and only then does the tool run. Middleware order
   is the invariant: an unsettled paid call never reaches the tool handler.
-- The proxy quotes every call unpaid first and refuses it BEFORE paying when
-  its running total would pass `PROXY_SPEND_CAP_USD`. The cap is
-  configuration, never derived from tool arguments, so a prompt-injected
-  tool call cannot raise it.
+- A paid call's first POST earns the 402 challenge before the tool runs; the
+  proxy refuses it BEFORE paying when its running total would pass
+  `PROXY_SPEND_CAP_USD`. The cap is configuration, never derived from tool
+  arguments, so a prompt-injected tool call cannot raise it.
 
 ## Setup (sandbox, ~10 minutes)
 
