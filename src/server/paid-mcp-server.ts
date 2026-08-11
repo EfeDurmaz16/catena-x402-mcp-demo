@@ -20,22 +20,21 @@ export interface PaidMcpServerOptions {
   facilitatorClient: FacilitatorClient
 }
 
+/** A request that must be paid for: a tools/call naming the paid tool, with
+ * a JSON-RPC id. Notifications (no id) get a 202 and never run the tool, so
+ * charging them would settle payment for no execution. The id shape matches
+ * the SDK's own RequestIdSchema: anything narrower here would let a request
+ * the SDK still executes through the gate unpaid. */
+const paidToolCall = z.object({
+  id: z.union([z.string(), z.number().int()]),
+  method: z.literal("tools/call"),
+  params: z.looseObject({ name: z.literal(PAID_TOOL) }),
+})
+
 /** The payment gate applies only to a tools/call for the paid tool;
  * discovery and free tools pass through unpaid. */
 function isPaidToolCall(body: unknown): boolean {
-  const message = body as
-    | {
-        id?: unknown
-        method?: unknown
-        params?: { name?: unknown }
-      }
-    | undefined
-  if (message?.method !== "tools/call" || message.params?.name !== PAID_TOOL) {
-    return false
-  }
-  // JSON-RPC notifications omit id; MCP answers 202 and never runs the tool.
-  // Charging those would settle payment for no execution.
-  return typeof message.id === "string" || typeof message.id === "number"
+  return paidToolCall.safeParse(body).success
 }
 
 /** Fresh MCP server per request: the transport is stateless, so nothing is
@@ -115,6 +114,16 @@ export function createPaidMcpServer(options: PaidMcpServerOptions): Express {
   })
 
   app.post(MCP_PATH, (req, res, next) => {
+    // express.json() only parses application/json, so any other content type
+    // reaches here unparsed. Refuse it before the gate sees a shapeless
+    // body: a request the gate cannot read is a request it cannot price.
+    if (typeof req.body !== "object" || req.body === null) {
+      res.status(415).json({
+        error: "unsupported_media_type",
+        message: "Send JSON-RPC with content-type: application/json",
+      })
+      return
+    }
     // JSON-RPC batching was removed from the MCP spec (2025-03-26 and
     // later), but the transport still tolerates arrays from legacy clients.
     // A batch could smuggle a paid tools/call past a single-message gate,
@@ -136,13 +145,14 @@ export function createPaidMcpServer(options: PaidMcpServerOptions): Express {
   app.post(MCP_PATH, async (req, res) => {
     // @x402/express buffers writeHead and skips settle when res.statusCode
     // >= 400. StreamableHTTPServerTransport sets status only via writeHead,
-    // leaving statusCode at 200 — sync it or MCP 4xx would still settle.
+    // leaving statusCode at 200: sync it or MCP 4xx would still settle.
     const bufferedWriteHead = res.writeHead.bind(res)
     res.writeHead = ((...args: Parameters<typeof res.writeHead>) => {
       if (typeof args[0] === "number") {
         res.statusCode = args[0]
       }
       return bufferedWriteHead(...args)
+      // cast: writeHead is overloaded, Parameters<> collapses to one signature.
     }) as typeof res.writeHead
 
     const transport = new StreamableHTTPServerTransport({

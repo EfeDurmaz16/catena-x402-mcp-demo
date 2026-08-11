@@ -11,19 +11,15 @@ import { createServer } from "node:http"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"
 import { HTTPFacilitatorClient } from "@x402/core/server"
+import { decodePaymentResponseHeader } from "@x402/fetch"
 import { loadConfig } from "../src/config.js"
-import { createPayingProxy } from "../src/proxy/bridge.js"
+import { createPayingProxy } from "../src/proxy/paying-proxy.js"
 import {
   createPaidMcpServer,
   MCP_PATH,
   PAID_TOOL,
 } from "../src/server/paid-mcp-server.js"
-
-try {
-  process.loadEnvFile()
-} catch {
-  // no .env file; environment variables may be set directly
-}
+import type { SettleResponse } from "@x402/core/types"
 
 const config = loadConfig()
 if (!config.SELLER_PAY_TO_ADDRESS || !config.BUYER_EVM_PRIVATE_KEY) {
@@ -52,15 +48,13 @@ console.log(`Pay-to:          ${config.SELLER_PAY_TO_ADDRESS}\n`)
 
 // Capture the settlement receipt the facilitator returns, so the demo can
 // show the transaction instead of asserting that one happened.
-let settlement: { transaction?: string } | undefined
+let settlement: SettleResponse | undefined
 const capturingFetch: typeof fetch = async (input, init) => {
   const response = await fetch(input, init)
   const header = response.headers.get("payment-response")
   if (header) {
     try {
-      settlement = JSON.parse(
-        Buffer.from(header, "base64").toString("utf8"),
-      ) as { transaction?: string }
+      settlement = decodePaymentResponseHeader(header)
     } catch {
       // a malformed receipt header is not worth failing the demo over
     }

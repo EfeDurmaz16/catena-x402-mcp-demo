@@ -2,12 +2,6 @@ import { HTTPFacilitatorClient } from "@x402/core/server"
 import { loadConfig } from "../config.js"
 import { createPaidMcpServer, MCP_PATH } from "./paid-mcp-server.js"
 
-try {
-  process.loadEnvFile()
-} catch {
-  // no .env file; environment variables may be set directly
-}
-
 const config = loadConfig()
 const payTo = config.SELLER_PAY_TO_ADDRESS
 if (!payTo) {

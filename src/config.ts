@@ -16,13 +16,17 @@ export function moneyToMicros(money: string): bigint {
   return BigInt(whole) * 1_000_000n + BigInt(rawFraction.padEnd(6, "0"))
 }
 
+/** .env.example ships these keys blank, so an untouched copy must read as
+ * absent rather than as an empty string that fails the regex. */
 const emptyToUndefined = (v: unknown) => (v === "" ? undefined : v)
 
-/** A positive US-dollar amount, e.g. "$0.001". */
+/** A positive US-dollar amount, e.g. "$0.001". The refine must not throw:
+ * zod v4 runs it even when the regex above already failed, and a thrown
+ * error would replace the prettified env report with a stack trace. */
 const usdAmount = z
   .string()
   .regex(/^\$\d+(\.\d{1,6})?$/)
-  .refine((v) => moneyToMicros(v) > 0n, "must be greater than 0")
+  .refine((v) => /[1-9]/.test(v), "must be greater than 0")
 
 const envSchema = z.object({
   MCP_PORT: z.coerce.number().int().positive().max(65535).default(4040),
@@ -58,9 +62,19 @@ const envSchema = z.object({
 export type Config = z.infer<typeof envSchema>
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
+  try {
+    process.loadEnvFile()
+  } catch {
+    // no .env file; environment variables may be set directly
+  }
   const parsed = envSchema.safeParse(env)
   if (!parsed.success) {
-    throw new Error(`Invalid environment:\n${z.prettifyError(parsed.error)}`)
+    // Exit 2 is this repo's config-error code (1 means a dependency is
+    // unreachable). A stack trace would bury the one line that helps.
+    console.error(
+      `Invalid environment (see .env.example):\n${z.prettifyError(parsed.error)}`,
+    )
+    process.exit(2)
   }
   return parsed.data
 }
