@@ -11,17 +11,25 @@ if (!config.BUYER_EVM_PRIVATE_KEY) {
 }
 
 // Check the upstream before the client spawns us and waits on a handshake
-// that cannot complete. /healthz is the cheapest proof the server is up.
+// that cannot complete. Only a connection-level failure is fatal: any HTTP
+// response (even a 404 from an upstream without /healthz) proves something
+// is listening, and a slow answer gets a warning, not a refusal, so the
+// probe can never block a working setup.
 try {
-  const health = await fetch(new URL("/healthz", config.UPSTREAM_MCP_URL))
-  if (!health.ok) {
-    throw new Error(`healthz returned ${health.status}`)
+  await fetch(new URL("/healthz", config.UPSTREAM_MCP_URL), {
+    signal: AbortSignal.timeout(3000),
+  })
+} catch (error) {
+  if (error instanceof Error && error.name === "TimeoutError") {
+    console.error(
+      `Upstream at ${config.UPSTREAM_MCP_URL} did not answer /healthz within 3s; continuing anyway.`,
+    )
+  } else {
+    console.error(
+      `Upstream MCP server unreachable at ${config.UPSTREAM_MCP_URL}; run 'pnpm server' first.`,
+    )
+    process.exit(1)
   }
-} catch {
-  console.error(
-    `Upstream MCP server unreachable at ${config.UPSTREAM_MCP_URL}; run 'pnpm server' first.`,
-  )
-  process.exit(1)
 }
 
 const proxy = createPayingProxy({
