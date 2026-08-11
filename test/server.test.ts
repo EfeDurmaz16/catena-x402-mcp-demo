@@ -76,10 +76,14 @@ describe("paid MCP server", () => {
     })
     expect(response.status).toBe(402)
     expect(response.headers.get("payment-required")).toBeTruthy()
+    // The tool did not run: no output leaked with the challenge, and the
+    // facilitator was never asked to verify anything.
+    expect(await response.text()).not.toContain("premium-market-signal")
+    expect(server.facilitator.verifyCalls).toHaveLength(0)
     expect(server.facilitator.settleCalls).toHaveLength(0)
   })
 
-  it("runs the paid tool and settles when the client pays the challenge", async () => {
+  it("runs the paid tool once the client pays, and discovery stays free after", async () => {
     server = await startTestServer()
     const client = await connectClient(server.url, payingFetch())
     const result = await client.callTool({
@@ -89,13 +93,7 @@ describe("paid MCP server", () => {
     expect(JSON.stringify(result.content)).toContain("premium-market-signal")
     expect(server.facilitator.verifyCalls).toHaveLength(1)
     expect(server.facilitator.settleCalls).toHaveLength(1)
-    await client.close()
-  })
 
-  it("keeps discovery free even after a paid call settled", async () => {
-    server = await startTestServer()
-    const client = await connectClient(server.url, payingFetch())
-    await client.callTool({ name: PAID_TOOL, arguments: { topic: "usdc" } })
     const tools = await client.listTools()
     expect(tools.tools.length).toBeGreaterThan(0)
     // Still exactly one settlement: discovery after payment stayed free.
@@ -130,7 +128,7 @@ describe("server hardening", () => {
 
   it("does not settle when a paid call returns MCP HTTP 4xx", async () => {
     server = await startTestServer()
-    // Missing text/event-stream in Accept → Streamable HTTP answers 406.
+    // Missing text/event-stream in Accept, so Streamable HTTP answers 406.
     // Without statusCode sync, @x402/express would still settle.
     const signer = privateKeyToAccount(TEST_PRIVATE_KEY)
     const fetchWithPay = wrapFetchWithPayment(
@@ -170,9 +168,33 @@ describe("server hardening", () => {
         params: { name: PAID_TOOL, arguments: { topic: "usdc" } },
       }),
     })
-    // Without an id this is not gated as paid; MCP may 202/4xx, but never settle.
+    // Without an id this is a notification: MCP accepts it with a 202 and
+    // never runs the tool, so there is nothing to charge for.
+    expect(response.status).toBe(202)
     expect(server.facilitator.verifyCalls).toHaveLength(0)
     expect(server.facilitator.settleCalls).toHaveLength(0)
-    expect(response.status).not.toBe(402)
+  })
+
+  it("refuses a paid tools/call sent as text/plain, unparsed and uncharged", async () => {
+    server = await startTestServer()
+    const response = await fetch(`${server.url}${MCP_PATH}`, {
+      method: "POST",
+      headers: {
+        "content-type": "text/plain",
+        accept: "application/json, text/event-stream",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: { name: PAID_TOOL, arguments: { topic: "usdc" } },
+      }),
+    })
+    // express.json() leaves a non-JSON content type unparsed, which would
+    // reach the gate as an unreadable body. It is refused instead.
+    expect(response.status).toBe(415)
+    expect(await response.text()).not.toContain("premium-market-signal")
+    expect(server.facilitator.verifyCalls).toHaveLength(0)
+    expect(server.facilitator.settleCalls).toHaveLength(0)
   })
 })
