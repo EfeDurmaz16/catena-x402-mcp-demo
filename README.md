@@ -16,38 +16,6 @@ flowchart LR
   class PX,SV pay
 ```
 
-```mermaid
-sequenceDiagram
-  autonumber
-  participant C as Standard client
-  participant P as Paying proxy
-  participant S as Paid MCP server
-  participant F as Facilitator
-
-  C->>P: tools/list
-  P->>S: tools/list
-  S-->>P: tools (free)
-  P-->>C: tools
-
-  C->>P: tools/call premium_market_signal
-  P->>S: POST (no payment yet)
-  S-->>P: 402 challenge
-  P->>P: within the spend cap? reserve it
-  P->>S: retry with signed payment
-  S->>F: verify
-  F-->>S: valid
-  S->>S: tool runs, response buffered
-  alt handler succeeded
-    S->>F: settle
-    F-->>S: settled
-    S-->>P: 200 result released
-  else handler returned 4xx
-    S->>S: settlement cancelled
-    S-->>P: error, nothing charged
-  end
-  P-->>C: ordinary tool result
-```
-
 ## How it works
 
 The x402 challenge lives at the HTTP layer of the MCP Streamable HTTP
@@ -64,13 +32,15 @@ untouched and standard clients stay compatible.
   pass `PROXY_SPEND_CAP_USD`. The cap is configuration, never derived from
   tool arguments, so a prompt-injected tool call cannot raise it.
 
-More detail: [docs/architecture.md](docs/architecture.md).
+The call-by-call sequence, including where settlement is cancelled, is in
+[docs/architecture.md](docs/architecture.md).
 
-## Setup (sandbox, ~10 minutes)
+## Setup
 
-Requires Node >= 22.13 and pnpm.
+Requires Node >= 22.13 (see `.nvmrc`) and pnpm.
 
 ```sh
+corepack enable
 pnpm install
 cp .env.example .env
 # SELLER_PAY_TO_ADDRESS: your Catena sandbox account's base-sepolia USDC
@@ -80,6 +50,10 @@ cp .env.example .env
 #   USDC only; no ETH is needed, transfers are gasless EIP-3009.
 ```
 
+Both entry points exit `2` when configuration is missing or invalid, and `1`
+when a dependency they need is unreachable (the facilitator for the server,
+the upstream MCP server for the proxy).
+
 ## Demo: the whole loop in one command
 
 ```sh
@@ -88,8 +62,40 @@ pnpm demo
 
 Boots the paid server against the public x402 facilitator, drives a standard
 MCP client through the paying proxy, and prints: free discovery, then the
-paid tool call settling ~$0.001 of testnet USDC into the Catena deposit
+paid tool call settling $0.001 of testnet USDC into the Catena deposit
 address.
+
+## See the 402 yourself
+
+Run `pnpm server` in one terminal, then ask for the paid tool without paying.
+The server answers `/healthz` with its price and paid-tool name, which is
+also what the proxy probes at startup:
+
+```sh
+curl -s http://localhost:4040/healthz
+```
+
+```
+{"status":"ok","paidTool":"premium_market_signal","price":"$0.001"}
+```
+
+The challenge itself travels in the `PAYMENT-REQUIRED` response header, not
+in the body (the body is `{}`), so decode the header to read it:
+
+```sh
+curl -si -X POST http://localhost:4040/mcp \
+  -H 'content-type: application/json' \
+  -H 'accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"premium_market_signal","arguments":{"topic":"usdc"}}}' \
+  | grep -i '^payment-required:' | tr -d '\r' | cut -d' ' -f2 | base64 -d
+```
+
+```
+{"x402Version":2,"error":"Payment required","resource":{"url":"http://localhost:4040/mcp","description":"One invocation of the premium_market_signal MCP tool","mimeType":""},"accepts":[{"scheme":"exact","network":"eip155:84532","amount":"1000","asset":"0x036CbD53842c5426634e7929541eC2318f3dCF7e","payTo":"0x7b597Bd9A2440d1a79E96c51733113dc8C8c9521","maxTimeoutSeconds":300,"extra":{"name":"USDC","version":"2"}}]}
+```
+
+Drop `| grep ...` to see the status line: `HTTP/1.1 402 Payment Required`.
+The tool never ran, so nothing settled.
 
 ## Use it from Claude Code (standard client)
 
@@ -118,17 +124,30 @@ behind the scenes. MCP Inspector works the same way:
 ## Tests
 
 `pnpm test` runs the server and proxy suites against an in-process server
-with a recording fake facilitator; no network, no money. They prove:
-discovery is free, an unpaid paid-tool call is refused with a 402 before the
-tool runs, a paid call settles exactly once, MCP 4xx does not settle, and
-the proxy refuses an over-cap call before any payment.
+with a recording fake facilitator: no network, no money. Each money-path
+invariant has a test that fails if it breaks.
+
+| Invariant                                          | Test                                                                       |
+| -------------------------------------------------- | -------------------------------------------------------------------------- |
+| Discovery and free tools cost nothing              | serves initialize, tools/list and free tools without any payment           |
+| An unpaid paid-tool call gets a 402 before it runs | rejects an unpaid paid-tool call with a 402 challenge before the tool runs |
+| A paid call settles exactly once                   | runs the paid tool once the client pays, and discovery stays free after    |
+| Discovery stays free through the proxy too         | keeps free surfaces free through the proxy                                 |
+| A standard client pays without knowing x402 exists | pays for the paid tool transparently and returns its result                |
+| A JSON-RPC batch is refused, never gated per item  | rejects JSON-RPC batch requests outright (fail closed)                     |
+| MCP HTTP 4xx cancels settlement                    | does not settle when a paid call returns MCP HTTP 4xx                      |
+| A notification (no id) is never charged            | does not charge a notification-shaped paid tools/call (no id)              |
+| An unparsable body is refused, not priced          | refuses a paid tools/call sent as text/plain, unparsed and uncharged       |
+| One upstream execution per paid call               | posts a paid call twice (402 then paid retry) and settles once             |
+| Only USDC on the pinned network is ever signed     | refuses an off-policy challenge (wrong network, wrong asset) unsigned      |
+| The spend cap binds before any payment             | refuses a call past the spend cap before any payment                       |
+| Concurrent calls cannot both slip under the cap    | caps concurrent paid calls: only one of two settles under a one-call cap   |
 
 ## Scope
 
-Consumes public surfaces only: the MCP TypeScript SDK (v1, protocol
-2025-11-25; the v2 SDK targeting the 2026-07-28 spec is beta, and migration
-is import-path-level), the public x402 packages and facilitator, and a
-Catena sandbox account as the receiving side.
+Public surfaces only: the MCP TypeScript SDK, the public x402 packages and
+facilitator, and a Catena sandbox account as the receiving side. Versions and
+limits: [docs/architecture.md](docs/architecture.md).
 
 ## License
 
