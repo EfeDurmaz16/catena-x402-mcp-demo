@@ -11,6 +11,7 @@ import {
 import { ExactEvmScheme } from "@x402/evm/exact/client"
 import { wrapFetchWithPayment, x402Client } from "@x402/fetch"
 import { privateKeyToAccount } from "viem/accounts"
+import { z } from "zod"
 import { moneyToMicros } from "../config.js"
 import type { PaymentRequirements } from "@x402/core/types"
 
@@ -24,15 +25,18 @@ export interface ProxyOptions {
   evmPrivateKey: `0x${string}`
   /** Total the proxy may spend across its lifetime, e.g. "$0.01". */
   spendCapUsd: string
-  /** Only challenges on this network are signed (e.g. "eip155:84532"). */
-  network: `${string}:${string}`
+  /** Only challenges on this network are signed. Narrowed to the one
+   * network the USDC pin above is true for: any other value would price
+   * the cap in the wrong asset. */
+  network: "eip155:84532"
   fetchImpl?: typeof fetch
 }
 
 /** True when @x402 refused to sign because every requirement was filtered
  * by our budget policy. Do NOT match HTTP 402 or the substring "x402":
  * post-payment 402s and scheme errors also contain those and are not
- * spend-cap refusals. */
+ * spend-cap refusals. The vendor string is pinned by the proxy's spend-cap
+ * test: if @x402 reworks the message, that test fails first. */
 function isBudgetRefusal(error: unknown): boolean {
   if (typeof error !== "object" || error === null) return false
   return (
@@ -61,6 +65,19 @@ export function createPayingProxy(options: ProxyOptions): Server {
   const capMicros = moneyToMicros(spendCapUsd)
   let spentMicros = 0n
 
+  // What a challenge must look like before this proxy will sign it. The SDK
+  // hands policies unparsed JSON (decodePaymentRequiredHeader is a bare
+  // JSON.parse); this parse is the real boundary. A shape that does not fit
+  // is refused, not repaired.
+  const signableRequirement = z.object({
+    network: z.literal(network),
+    // .toLowerCase() is load-bearing: the server returns a checksummed
+    // address, and the pinned constant is lowercase.
+    asset: z.string().refine((v) => v.toLowerCase() === USDC_BASE_SEPOLIA),
+    amount: z.string().regex(/^\d+$/),
+    maxTimeoutSeconds: z.number().int().positive().max(600),
+  })
+
   // The x402 client runs this synchronous policy while selecting what to
   // pay: challenges the remaining budget cannot cover are filtered out, and
   // the chosen amount is reserved in the same tick, so overlapping tool
@@ -72,26 +89,13 @@ export function createPayingProxy(options: ProxyOptions): Server {
     requirements: PaymentRequirements[],
   ): PaymentRequirements[] => {
     const affordable = requirements.filter((r) => {
-      const {
-        amount,
-        network: reqNetwork,
-        asset,
-      } = r as {
-        amount?: unknown
-        network?: unknown
-        asset?: unknown
-      }
+      const parsed = signableRequirement.safeParse(r)
       return (
-        reqNetwork === network &&
-        typeof asset === "string" &&
-        asset.toLowerCase() === USDC_BASE_SEPOLIA &&
-        typeof amount === "string" &&
-        /^\d+$/.test(amount) &&
-        spentMicros + BigInt(amount) <= capMicros
+        parsed.success && spentMicros + BigInt(parsed.data.amount) <= capMicros
       )
     })
-    const chosen = affordable[0] as { amount?: string } | undefined
-    if (chosen?.amount) spentMicros += BigInt(chosen.amount)
+    const chosen = affordable[0]
+    if (chosen) spentMicros += BigInt(chosen.amount)
     // Return only the reserved entry so reserved == signed by construction,
     // not by relying on the client's default first-entry selector.
     return affordable.slice(0, 1)
@@ -149,7 +153,7 @@ export function createPayingProxy(options: ProxyOptions): Server {
           content: [
             {
               type: "text",
-              text: `Refused before payment: paying this call would exceed the proxy's spend cap (spent ${spentMicros} of ${capMicros} micro-USD).`,
+              text: `Refused before payment: no challenge passed this proxy's policy (USDC on ${network}, within the spend cap; spent ${spentMicros} of ${capMicros} micro-USD).`,
             },
           ],
         }

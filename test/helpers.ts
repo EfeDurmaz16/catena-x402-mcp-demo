@@ -18,12 +18,6 @@ export const TEST_PAY_TO = "0x0000000000000000000000000000000000000001"
 export const TEST_PRIVATE_KEY =
   "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d" as const
 
-function payloadPayer(payload: PaymentPayload): string | undefined {
-  const inner = (payload.payload as { authorization?: { from?: unknown } })
-    .authorization?.from
-  return typeof inner === "string" ? inner : undefined
-}
-
 /** Records every verify/settle call and approves everything, so tests can
  * assert exactly when settlement is (and is not) reached without a network. */
 export class FakeFacilitatorClient implements FacilitatorClient {
@@ -35,8 +29,7 @@ export class FakeFacilitatorClient implements FacilitatorClient {
     _requirements: PaymentRequirements,
   ): Promise<VerifyResponse> {
     this.verifyCalls.push(payload)
-    const payer = payloadPayer(payload)
-    return Promise.resolve({ isValid: true, ...(payer ? { payer } : {}) })
+    return Promise.resolve({ isValid: true })
   }
 
   settle(
@@ -44,12 +37,10 @@ export class FakeFacilitatorClient implements FacilitatorClient {
     _requirements: PaymentRequirements,
   ): Promise<SettleResponse> {
     this.settleCalls.push(payload)
-    const payer = payloadPayer(payload)
     return Promise.resolve({
       success: true,
       transaction: "0xtest-settlement-transaction",
       network: TEST_NETWORK,
-      ...(payer ? { payer } : {}),
     })
   }
 
@@ -68,11 +59,11 @@ export interface TestServer {
   close: () => Promise<void>
 }
 
-export async function startTestServer(): Promise<TestServer> {
+export async function startTestServer(price = "$0.001"): Promise<TestServer> {
   const facilitator = new FakeFacilitatorClient()
   const app = createPaidMcpServer({
     payTo: TEST_PAY_TO,
-    price: "$0.001",
+    price,
     network: TEST_NETWORK,
     facilitatorClient: facilitator,
   })
