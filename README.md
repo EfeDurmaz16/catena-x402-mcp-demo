@@ -91,7 +91,7 @@ curl -si -X POST http://localhost:4040/mcp \
 ```
 
 ```
-{"x402Version":2,"error":"Payment required","resource":{"url":"http://localhost:4040/mcp","description":"One invocation of the premium_market_signal MCP tool","mimeType":""},"accepts":[{"scheme":"exact","network":"eip155:84532","amount":"1000","asset":"0x036CbD53842c5426634e7929541eC2318f3dCF7e","payTo":"0x7b597Bd9A2440d1a79E96c51733113dc8C8c9521","maxTimeoutSeconds":300,"extra":{"name":"USDC","version":"2"}}]}
+{"x402Version":2,"error":"Payment required","resource":{"url":"http://localhost:4040/mcp","description":"One invocation of the premium_market_signal MCP tool","mimeType":""},"accepts":[{"scheme":"exact","network":"eip155:84532","amount":"1000","asset":"0x036CbD53842c5426634e7929541eC2318f3dCF7e","payTo":"0x000000000000000000000000000000000000dEaD","maxTimeoutSeconds":300,"extra":{"name":"USDC","version":"2"}}]}
 ```
 
 Drop `| grep ...` to see the status line: `HTTP/1.1 402 Payment Required`.
