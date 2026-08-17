@@ -41,7 +41,7 @@ function isPaidToolCall(body: unknown): boolean {
  * shared between calls and a crashed request cannot poison the next one. */
 function buildMcpServer(price: string): McpServer {
   const server = new McpServer({
-    name: "catena-x402-mcp-demo",
+    name: "x402-mcp-demo",
     version: "0.1.0",
   })
   server.registerTool(

@@ -1,4 +1,4 @@
-# catena-x402-mcp-demo
+# x402-mcp-demo
 
 An MCP server whose tool invocations are metered and charged over x402, plus
 a paying-proxy reference client that lets any standard MCP client use the
@@ -107,7 +107,7 @@ as an ordinary stdio MCP server in `.mcp.json`:
   "mcpServers": {
     "paid-market-signal": {
       "command": "pnpm",
-      "args": ["--dir", "/path/to/catena-x402-mcp-demo", "proxy"]
+      "args": ["--dir", "/path/to/x402-mcp-demo", "proxy"]
     }
   }
 }

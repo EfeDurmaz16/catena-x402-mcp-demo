@@ -111,7 +111,7 @@ natural fit for MCP tools, where one call yields one result.
 ## Known limits
 
 - **No identity gate.** ACK-ID verification before settlement is the
-  composition point with catena-x402-ack-id-demo: its identity middleware
+  composition point with x402-ack-id-demo: its identity middleware
   mounts in front of the payment gate unchanged. Deliberately out of scope
   here to keep each demo single-purpose.
 - **Per-call upstream connection.** The proxy opens a fresh MCP connection

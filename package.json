@@ -1,11 +1,11 @@
 {
-  "name": "catena-x402-mcp-demo",
+  "name": "x402-mcp-demo",
   "version": "0.1.0",
   "description": "MCP server with x402-metered tool calls, plus a paying-proxy reference client",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/EfeDurmaz16/catena-x402-mcp-demo.git"
+    "url": "git+https://github.com/catena-oss/x402-mcp-demo.git"
   },
   "type": "module",
   "private": true,

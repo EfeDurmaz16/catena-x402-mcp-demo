@@ -8,5 +8,5 @@ throwaway testnet key that the paying proxy signs with; anything it holds
 should be worthless.
 
 Report a vulnerability privately through GitHub Security Advisories on
-https://github.com/EfeDurmaz16/catena-x402-mcp-demo. Please do not open a
+https://github.com/catena-oss/x402-mcp-demo. Please do not open a
 public issue first.
